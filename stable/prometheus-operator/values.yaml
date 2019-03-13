@@ -133,16 +133,17 @@ alertmanager:
   #           {{ end }}
 
   ingress:
-    enabled: false
+    enabled: true
 
-    annotations: {}
+    annotations:
+      kubernetes.io/ingress.class: nginx
 
     labels: {}
 
     ## Hosts must be provided if Ingress is enabled.
     ##
-    hosts: []
-      # - alertmanager.domain.com
+    hosts:
+      - alertmanager.k8s.local
 
     ## TLS configuration for Alertmanager Ingress
     ## Secret must be manually created in the namespace
@@ -219,14 +220,14 @@ alertmanager:
     ## Storage is the definition of how storage will be used by the Alertmanager instances.
     ## ref: https://github.com/coreos/prometheus-operator/blob/master/Documentation/user-guides/storage.md
     ##
-    storage: {}
-    # volumeClaimTemplate:
-    #   spec:
-    #     storageClassName: gluster
-    #     accessModes: ["ReadWriteOnce"]
-    #     resources:
-    #       requests:
-    #         storage: 50Gi
+    storage:
+     volumeClaimTemplate:
+       spec:
+         storageClassName: thin-disk
+         accessModes: ["ReadWriteOnce"]
+         resources:
+           requests:
+             storage: 2Gi
     #   selector: {}
 
 
@@ -312,16 +313,18 @@ grafana:
   defaultDashboardsEnabled: true
 
   adminPassword: prom-operator
+  serviceMonitor:
+    selfMonitor: true
 
   ingress:
     ## If true, Prometheus Ingress will be created
     ##
-    enabled: false
+    enabled: true
 
     ## Annotations for Prometheus Ingress
     ##
-    annotations: {}
-      # kubernetes.io/ingress.class: nginx
+    annotations:
+      kubernetes.io/ingress.class: nginx
       # kubernetes.io/tls-acme: "true"
 
     ## Labels to be added to the Ingress
@@ -333,7 +336,8 @@ grafana:
     ##
     # hosts:
     #   - prometheus.domain.com
-    hosts: []
+    hosts:
+      - k8s.local
 
     ## TLS configuration for prometheus Ingress
     ## Secret must be manually created in the namespace
@@ -357,10 +361,15 @@ grafana:
   #   configMap: certs-configmap
   #   readOnly: true
 
-  ## If true, create a serviceMonitor for grafana
-  ##
-  serviceMonitor:
-    selfMonitor: true
+  persistence:
+    enabled: true
+    storageClassName: thin-disk
+    accessModes:
+      - ReadWriteOnce
+    size: 2Gi
+    # annotations: {}
+    # subPath: ""
+    # existingClaim:
 
 ## Component scraping the kube api server
 ##
@@ -369,18 +378,6 @@ kubeApiServer:
   tlsConfig:
     serverName: kubernetes
     insecureSkipVerify: false
-
-  ## If your API endpoint address is not reachable (as in AKS) you can replace it with the kubernetes service
-  ##
-  relabelings: []
-  # - sourceLabels:
-  #     - __meta_kubernetes_namespace
-  #     - __meta_kubernetes_service_name
-  #     - __meta_kubernetes_endpoint_port_name
-  #   action: keep
-  #   regex: default;kubernetes;https
-  # - targetLabel: __address__
-  #   replacement: kubernetes.default.svc:443
 
   serviceMonitor:
     jobLabel: component
@@ -399,19 +396,7 @@ kubelet:
     ## Enable scraping the kubelet over https. For requirements to enable this see
     ## https://github.com/coreos/prometheus-operator/issues/926
     ##
-    https: false
-    # cAdvisorMetricRelabelings:
-    # - sourceLabels: [__name__, image]
-    #   separator: ;
-    #   regex: container_([a-z_]+);
-    #   replacement: $1
-    #   action: drop
-    # - sourceLabels: [__name__]
-    #   separator: ;
-    #   regex: container_(network_tcp_usage_total|network_udp_usage_total|tasks_state|cpu_load_average_10s)
-    #   replacement: $1
-    #   action: drop
-
+    https: true
 
 ## Component scraping the kube controller manager
 ##
@@ -420,10 +405,10 @@ kubeControllerManager:
 
   ## If your kube controller manager is not deployed as a pod, specify IPs it can be found on
   ##
-  endpoints: []
-  # - 10.141.4.22
-  # - 10.141.4.23
-  # - 10.141.4.24
+  endpoints:
+    - 10.10.40.11
+    - 10.10.40.12
+    - 10.10.40.13
 
   ## If using kubeControllerManager.endpoints only the port and targetPort are used
   ##
@@ -442,7 +427,7 @@ kubeControllerManager:
 ## Component scraping coreDns. Use either this or kubeDns
 ##
 coreDns:
-  enabled: true
+  enabled: false
   service:
     port: 9153
     targetPort: 9153
@@ -452,7 +437,7 @@ coreDns:
 ## Component scraping kubeDns. Use either this or coreDns
 ##
 kubeDns:
-  enabled: false
+  enabled: true
   service:
     selector:
       k8s-app: kube-dns
@@ -463,16 +448,16 @@ kubeEtcd:
 
   ## If your etcd is not deployed as a pod, specify IPs it can be found on
   ##
-  endpoints: []
-  # - 10.141.4.22
-  # - 10.141.4.23
-  # - 10.141.4.24
+  endpoints:
+    - 10.10.40.11
+    - 10.10.40.12
+    - 10.10.40.13
 
   ## Etcd service. If using kubeEtcd.endpoints only the port and targetPort are used
   ##
   service:
-    port: 4001
-    targetPort: 4001
+    port: 2379
+    targetPort: 2379
     selector:
       k8s-app: etcd-server
 
@@ -488,25 +473,25 @@ kubeEtcd:
   ##   keyFile: /etc/prometheus/secrets/etcd-client-cert/etcd-client-key
   ##
   serviceMonitor:
-    scheme: http
-    insecureSkipVerify: false
-    serverName: ""
-    caFile: ""
-    certFile: ""
-    keyFile: ""
+    scheme: https
+    insecureSkipVerify: true
+    serverName: localhost
+    caFile: "/etc/prometheus/secrets/etcd-client-cert/kube-ca.pem"
+    certFile: "/etc/prometheus/secrets/etcd-client-cert/kube-node.pem"
+    keyFile: "/etc/prometheus/secrets/etcd-client-cert/kube-node-key.pem"
 
 
 ## Component scraping kube scheduler
 ##
 kubeScheduler:
-  enabled: true
+  enabled: false
 
   ## If your kube scheduler is not deployed as a pod, specify IPs it can be found on
   ##
-  endpoints: []
-  # - 10.141.4.22
-  # - 10.141.4.23
-  # - 10.141.4.24
+  endpoints:
+   - 10.10.40.11
+   - 10.10.40.12
+   - 10.10.40.13
 
   ## If using kubeScheduler.endpoints only the port and targetPort are used
   ##
@@ -634,9 +619,6 @@ prometheusOperator:
   ## Define Log Format
   # Use logfmt (default) or json-formatted logging
   # logFormat: logfmt
-
-  ## Decrease log verbosity to errors only
-  # logLevel: error
 
   ## If true, the operator will create and maintain a service for scraping kubelets
   ## ref: https://github.com/coreos/prometheus-operator/blob/master/helm/prometheus-operator/README.md
@@ -767,8 +749,6 @@ prometheus:
     ##
     type: ClusterIP
 
-    sessionAffinity: ""
-
   rbac:
     ## Create role bindings in the specified namespaces, to allow Prometheus monitoring
     ## a role binding in the release namespace will always be created.
@@ -787,17 +767,17 @@ prometheus:
     maxUnavailable: ""
 
   ingress:
-    enabled: false
-    annotations: {}
+    enabled: true
+    annotations:
+      kubernetes.io/ingress.class: nginx
     labels: {}
 
     ## Hostnames.
     ## Must be provided if Ingress is enabled.
     ##
-    # hosts:
-    #   - prometheus.domain.com
-    hosts: []
-
+    hosts:
+      - prometheus.k8s.local
+    
     ## TLS configuration for Prometheus Ingress
     ## Secret must be manually created in the namespace
     ##
@@ -870,7 +850,8 @@ prometheus:
     ## reflected in the running Pods. To change the secrets mounted into the Prometheus Pods, the object must be deleted and recreated
     ## with the new list of secrets.
     ##
-    secrets: []
+    secrets:
+      - etcd-client-cert
 
     ## ConfigMaps is a list of ConfigMaps in the same namespace as the Prometheus object, which shall be mounted into the Prometheus Pods.
     ## The ConfigMaps are mounted into /etc/prometheus/configmaps/.
@@ -883,8 +864,7 @@ prometheus:
     query: {}
 
     ## Namespaces to be selected for PrometheusRules discovery.
-    ## If nil, select own namespace. Namespaces to be selected for ServiceMonitor discovery.
-    ## See https://github.com/coreos/prometheus-operator/blob/master/Documentation/api.md#namespaceselector for usage
+    ## If unspecified, only the same namespace as the Prometheus object is in is used.
     ##
     ruleNamespaceSelector: {}
 
@@ -894,8 +874,10 @@ prometheus:
     ##
     ruleSelectorNilUsesHelmValues: true
 
-    ## PrometheusRules to be selected for target discovery.
-    ## If {}, select all ServiceMonitors
+    ## Rules CRD selector
+    ## ref: https://github.com/coreos/prometheus-operator/blob/master/Documentation/design.md
+    ## If unspecified the release `app` and `release` will be used as the label selector
+    ## to load rules
     ##
     ruleSelector: {}
     ## Example which select all prometheusrules resources
@@ -919,23 +901,23 @@ prometheus:
     ##
     serviceMonitorSelectorNilUsesHelmValues: true
 
-    ## ServiceMonitors to be selected for target discovery.
-    ## If {}, select all ServiceMonitors
+    ## serviceMonitorSelector will limit which servicemonitors are used to create scrape
+    ## configs in Prometheus. See serviceMonitorSelectorUseHelmLabels
     ##
     serviceMonitorSelector: {}
-    ## Example which selects ServiceMonitors with label "prometheus" set to "somelabel"
-    # serviceMonitorSelector:
+
+    # serviceMonitorSelector: {}
     #   matchLabels:
     #     prometheus: somelabel
 
-    ## Namespaces to be selected for ServiceMonitor discovery.
-    ## See https://github.com/coreos/prometheus-operator/blob/master/Documentation/api.md#namespaceselector for usage
+    ## serviceMonitorNamespaceSelector will limit namespaces from which serviceMonitors are used to create scrape
+    ## configs in Prometheus. By default all namespaces will be used
     ##
     serviceMonitorNamespaceSelector: {}
 
     ## How long to retain metrics
     ##
-    retention: 10d
+    retention: 1d
 
     ## If true, the Operator won't process any Prometheus configuration changes
     ##
@@ -993,15 +975,15 @@ prometheus:
     ## Prometheus StorageSpec for persistent data
     ## ref: https://github.com/coreos/prometheus-operator/blob/master/Documentation/user-guides/storage.md
     ##
-    storageSpec: {}
-    #  volumeClaimTemplate:
-    #    spec:
-    #      storageClassName: gluster
-    #      accessModes: ["ReadWriteOnce"]
-    #      resources:
-    #        requests:
-    #          storage: 50Gi
-    #    selector: {}
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: thin-disk
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 4Gi
+        selector: {}
 
     ## AdditionalScrapeConfigs allows specifying additional Prometheus scrape configurations. Scrape configurations
     ## are appended to the configurations generated by the Prometheus Operator. Job configurations must have the form
@@ -1014,7 +996,89 @@ prometheus:
     ## The scrape configuraiton example below will find master nodes, provided they have the name .*mst.*, relabel the
     ## port to 2379 and allow etcd scraping provided it is running on all Kubernetes master nodes
     ##
-    additionalScrapeConfigs: []
+    additionalScrapeConfigs:
+    - job_name: 'metallb-system'
+      kubernetes_sd_configs:
+      - role: pod
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: keep
+        regex: (.*metallb.*)
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+    - job_name: 'gitlab'
+      kubernetes_sd_configs:
+      - role: pod
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: keep
+        regex: (.*sidekiq.*|.*gitlab-runner.*)
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+    - job_name: 'unknown'
+      kubernetes_sd_configs:
+      - role: pod
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: drop
+        regex: (*.redis-ha*.|.*metallb.*|.*sidekiq.*|.*gitlab-runner.*)
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+    #additionalScrapeConfigs: []
     # - job_name: kube-etcd
     #   kubernetes_sd_configs:
     #     - role: node
