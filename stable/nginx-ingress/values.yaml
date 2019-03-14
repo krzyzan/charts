@@ -238,7 +238,7 @@ controller:
 
 
   stats:
-    enabled: false
+    enabled: true
 
     service:
       annotations: {}
@@ -257,7 +257,7 @@ controller:
   ## If controller.stats.enabled = true and controller.metrics.enabled = true, Prometheus metrics will be exported
   ##
   metrics:
-    enabled: false
+    enabled: true
 
     service:
       annotations: {}
@@ -277,9 +277,9 @@ controller:
       type: ClusterIP
 
     serviceMonitor:
-      enabled: false
-      additionalLabels: {}
-      namespace: ""
+      enabled: true
+      additionalLabels:
+        release: prometheus-operator
 
   lifecycle: {}
 
@@ -380,8 +380,8 @@ imagePullSecrets: []
 # TCP service key:value pairs
 # Ref: https://github.com/kubernetes/contrib/tree/master/ingress/controllers/nginx/examples/tcp
 ##
-tcp: {}
-#  8080: "default/example-tcp-svc:9000"
+tcp:
+  22: "gitlab/gitlab-gitlab-shell:22"
 
 # UDP service key:value pairs
 # Ref: https://github.com/kubernetes/contrib/tree/master/ingress/controllers/nginx/examples/udp
